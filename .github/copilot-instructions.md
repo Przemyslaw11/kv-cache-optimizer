@@ -85,7 +85,7 @@ Always document tensor shapes in comments and docstrings using this format:
 
 ### Blocked Sparse Matrix — Zero-Copy Append
 
-The `BlockedCSCMatrix` pre-allocates memory in blocks of `block_size` tokens (default 256). Appending a token is O(1). Only call `to_standard_csc()` when you need to perform matrix operations (attention computation). This is the critical performance pattern — never bypass it with naive `torch.cat` in a loop.
+The `BlockedCSCMatrix` pre-allocates memory in blocks of `block_size` tokens. The default is 256 but this is **configurable and pending ablation** (candidates: 64, 128, 256, 512, 1024 — see `experiments/ablation_block_size.py`). Always accept `block_size` as a parameter, never hardcode it. Appending a token is O(1). Only call `to_standard_csc()` when you need to perform matrix operations (attention computation). This is the critical performance pattern — never bypass it with naive `torch.cat` in a loop.
 
 ### Variable-Length Batch Handling
 
@@ -103,16 +103,100 @@ The correct quantization pipeline is:
 4. **Store outliers** in blocked sparse matrix (CSC for keys, CSR for values)
 5. **Dequantize** = NUQ lookup + add sparse outliers + rescale
 
-### Fused vs. Naive Path
+### Fused vs. Naive Path — PyTorch First
 
-Prefer the **PyTorch loop-fused** path (`pytorch_fused.py`) over custom Triton kernels unless profiling shows the fused path is the bottleneck. The fused path vectorizes quantization across all heads and tokens in a single pass, avoiding intermediate fp16 materialization.
+**Always use the PyTorch loop-fused path** (`pytorch_fused.py`) as the default implementation. The fused path vectorizes quantization across all heads and tokens in a single pass, avoiding intermediate fp16 materialization. Triton kernels (`triton_kernels.py`) are an **optional optimization layer** — only invest in them after the PyTorch path is correct, tested, and profiling confirms it is the bottleneck. All new quantization logic must be implemented and validated in PyTorch first; a Triton port is never a prerequisite for merging.
+
+## Development Tooling
+
+### Package Management — uv
+
+Use **[uv](https://docs.astral.sh/uv/)** for all dependency management. The project is defined via `pyproject.toml` (no `setup.py` or `requirements.txt` for dev workflows).
+
+```bash
+uv sync                  # Install all deps (including dev group)
+uv add <package>         # Add a runtime dependency
+uv add --group dev <pkg> # Add a dev-only dependency
+uv run pytest            # Run commands inside the managed env
+uv lock                  # Regenerate lockfile after pyproject.toml changes
+```
+
+Pin exact versions for reproducibility. Always commit `uv.lock`.
+
+### Linting & Formatting — Ruff
+
+Use **[Ruff](https://docs.astral.sh/ruff/)** as the single tool for both linting and formatting. Configuration lives in `pyproject.toml`:
+
+```toml
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",         # Pyflakes
+    "I",         # isort
+    "UP",        # pyupgrade
+    "B",         # flake8-bugbear
+    "SIM",       # flake8-simplify
+    "RUF",       # Ruff-specific rules
+]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.isort]
+known-first-party = ["kvquant", "utils"]
+```
+
+Run before every commit:
+
+```bash
+uv run ruff check . --fix   # Lint (auto-fix safe issues)
+uv run ruff format .         # Format
+```
+
+CI must pass `ruff check .` and `ruff format --check .` with zero violations.
+
+### Testing — pytest
+
+All tests live in `tests/` and are run via pytest:
+
+```bash
+uv run pytest tests/ -v                     # Full suite
+uv run pytest tests/test_batched_quant.py   # Single module
+uv run pytest -k "round_trip"               # By keyword
+uv run pytest --tb=short -q                 # Quick summary
+```
+
+Test file naming: `tests/test_<module>.py` mirroring `kvquant/<module>.py`. Use `@pytest.mark.gpu` to mark tests that require CUDA — CI without GPUs skips them:
+
+```python
+import pytest
+
+@pytest.mark.gpu
+def test_quantize_on_device():
+    ...
+```
+
+### Pre-commit Checks
+
+The expected pre-commit workflow (manual or via `pre-commit` hooks):
+
+1. `uv run ruff check . --fix`
+2. `uv run ruff format .`
+3. `uv run pytest tests/ -v`
+4. Commit only if all three pass.
+
+### Type Checking
+
+Use type hints on all public APIs. Optionally validate with `mypy --ignore-missing-imports kvquant/`.
 
 ## Testing Strategy
 
 - **Unit tests** (`tests/`): Quantization round-trip error < 0.05, blocked sparse correctness (compare `to_standard_csc()` output against naive `torch.cat` reference).
 - **Integration tests**: Single-sample perplexity degradation < 0.2 PPL on Wikitext-2.
 - **Statistical validation**: All accuracy claims require **5-seed runs** with paired t-test (p > 0.05 = no significant degradation).
-- Run tests before every commit. Use `pytest tests/ -v` locally.
+- Run `uv run pytest tests/ -v` before every commit.
 
 ## Experiment Execution
 
@@ -137,20 +221,30 @@ Use the templates in `slurm_jobs/`. Key settings for Athena:
 
 - Set `torch.manual_seed(42)` and `torch.cuda.manual_seed_all(42)` at the start of every experiment.
 - Log all hyperparameters to WandB (`project="kvquant-prefill"`).
-- Pin dependency versions in `requirements.txt`.
+- Pin exact dependency versions in `pyproject.toml` and commit `uv.lock`.
 
 ## Key Dependencies
 
 | Package | Version | Purpose |
 |---------|---------|---------|
 | PyTorch | 2.4.0 | Core framework |
-| Triton | 2.1.0 | Custom CUDA kernels |
+| Triton | 2.1.0 | Custom CUDA kernels (optional) |
 | transformers | latest | Model loading (Llama-2-7B-32K) |
 | pynvml | latest | GPU energy measurement |
 | codecarbon | latest | Carbon emissions tracking |
 | wandb | latest | Experiment logging |
 | scipy | latest | Statistical tests |
 | matplotlib | latest | Publication-quality figures |
+
+**Dev-only (in `[dependency-groups]` → `dev`):**
+
+| Package | Purpose |
+|---------|---------|
+| ruff | Linting + formatting |
+| pytest | Test runner |
+| pytest-cov | Coverage reports |
+| mypy | Optional type checking |
+| pre-commit | Git hook management |
 
 ## What NOT to Do
 
