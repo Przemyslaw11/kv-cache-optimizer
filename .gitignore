@@ -205,3 +205,29 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ========================
+# Project-specific ignores
+# ========================
+
+# Models (large files — download on cluster)
+models/
+
+# Experiment results (generated on cluster)
+results/*.json
+results/*.csv
+!results/.gitkeep
+
+# Slurm logs
+logs/*.out
+logs/*.err
+!logs/.gitkeep
+
+# WandB offline logs
+wandb/
+
+# uv lockfile is committed, but venv is not
+venv/
+
+# CodeCarbon
+*.codecarbon.csv
