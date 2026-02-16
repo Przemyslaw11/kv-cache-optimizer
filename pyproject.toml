@@ -11,7 +11,7 @@ authors = [
 dependencies = [
     "torch==2.4.0",
     "transformers>=4.40.0",
-    "pynvml>=11.5.0",
+    "nvidia-ml-py>=12.560.30",
     "codecarbon>=2.3.0",
     "wandb>=0.16.0",
     "scipy>=1.11.0",

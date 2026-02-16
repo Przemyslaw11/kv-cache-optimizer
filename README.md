@@ -73,11 +73,9 @@ Experiments run on the `plgrid-gpu-a100` partition of the Athena supercomputer (
     module load CUDA/12.4.0
     module list
 
-    python3 -m venv venv
-    source venv/bin/activate
-
     pip install uv
     uv sync
+    source .venv/bin/activate
     ```
 
     **Key Runtime Environment Versions:**
@@ -103,7 +101,7 @@ Experiments run on the `plgrid-gpu-a100` partition of the Athena supercomputer (
     module purge
     module load Python/3.10.4
     module load CUDA/12.4.0
-    source venv/bin/activate
+    source .venv/bin/activate
     python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}, Device: {torch.cuda.get_device_name(0)}')"
     ```
 

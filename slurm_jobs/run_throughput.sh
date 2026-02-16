@@ -27,6 +27,8 @@ module load Python/3.10.4
 module load CUDA/12.4.0
 module list
 
+# Ensure SCRATCH is defined (may not survive module purge on some clusters)
+export SCRATCH="${SCRATCH:-/net/tscratch/people/$(whoami)}"
 cd $SCRATCH/kv-cache-optimizer
 source .venv/bin/activate
 
