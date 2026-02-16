@@ -219,6 +219,132 @@ def load_codebook(path: str | Path, device: torch.device | str = "cpu") -> torch
 
 
 # ------------------------------------------------------------------
+# Per-layer codebook management (for model integration)
+# ------------------------------------------------------------------
+
+
+def save_per_layer_codebooks(
+    codebooks: dict[int, torch.Tensor],
+    output_dir: str | Path,
+    prefix: str = "codebook",
+) -> None:
+    """Save per-layer codebooks to a directory.
+
+    Each codebook is saved as ``<output_dir>/<prefix>_layer<idx>.pt``.
+
+    Args:
+        codebooks: Mapping from layer index to codebook tensor.
+        output_dir: Directory to save codebooks into.
+        prefix: Filename prefix (default ``"codebook"``).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for layer_idx, codebook in codebooks.items():
+        path = output_dir / f"{prefix}_layer{layer_idx}.pt"
+        torch.save(codebook, path)
+    logger.info("Saved %d per-layer codebooks to %s", len(codebooks), output_dir)
+
+
+def load_per_layer_codebooks(
+    input_dir: str | Path,
+    prefix: str = "codebook",
+    device: torch.device | str = "cpu",
+) -> dict[int, torch.Tensor]:
+    """Load per-layer codebooks from a directory.
+
+    Scans for files matching ``<prefix>_layer<N>.pt`` and loads them.
+
+    Args:
+        input_dir: Directory containing saved codebook files.
+        prefix: Filename prefix (default ``"codebook"``).
+        device: Device to load codebooks onto.
+
+    Returns:
+        Mapping from layer index to codebook tensor.
+
+    Raises:
+        FileNotFoundError: If *input_dir* does not exist.
+    """
+    input_dir = Path(input_dir)
+    if not input_dir.exists():
+        raise FileNotFoundError(f"Codebook directory not found: {input_dir}")
+
+    codebooks: dict[int, torch.Tensor] = {}
+    for path in sorted(input_dir.glob(f"{prefix}_layer*.pt")):
+        # Extract layer index from filename
+        name = path.stem  # e.g. "codebook_layer5"
+        layer_str = name.replace(f"{prefix}_layer", "")
+        try:
+            layer_idx = int(layer_str)
+        except ValueError:
+            logger.warning("Skipping unrecognized codebook file: %s", path)
+            continue
+        codebooks[layer_idx] = torch.load(path, map_location=device, weights_only=True)
+
+    logger.info("Loaded %d per-layer codebooks from %s", len(codebooks), input_dir)
+    return codebooks
+
+
+def save_per_layer_scaling_factors(
+    scaling_factors: dict[int, torch.Tensor],
+    output_dir: str | Path,
+    prefix: str = "scales",
+) -> None:
+    """Save per-layer scaling factors to a directory.
+
+    Each scaling factor tensor is saved as ``<output_dir>/<prefix>_layer<idx>.pt``.
+
+    Args:
+        scaling_factors: Mapping from layer index to scaling tensor ``[H, D]``.
+        output_dir: Directory to save into.
+        prefix: Filename prefix (default ``"scales"``).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for layer_idx, scales in scaling_factors.items():
+        path = output_dir / f"{prefix}_layer{layer_idx}.pt"
+        torch.save(scales, path)
+    logger.info("Saved %d per-layer scaling factors to %s", len(scaling_factors), output_dir)
+
+
+def load_per_layer_scaling_factors(
+    input_dir: str | Path,
+    prefix: str = "scales",
+    device: torch.device | str = "cpu",
+) -> dict[int, torch.Tensor]:
+    """Load per-layer scaling factors from a directory.
+
+    Args:
+        input_dir: Directory containing saved scaling factor files.
+        prefix: Filename prefix (default ``"scales"``).
+        device: Device to load onto.
+
+    Returns:
+        Mapping from layer index to scaling tensor ``[H, D]``.
+
+    Raises:
+        FileNotFoundError: If *input_dir* does not exist.
+    """
+    input_dir = Path(input_dir)
+    if not input_dir.exists():
+        raise FileNotFoundError(f"Scaling factors directory not found: {input_dir}")
+
+    scales: dict[int, torch.Tensor] = {}
+    for path in sorted(input_dir.glob(f"{prefix}_layer*.pt")):
+        name = path.stem
+        layer_str = name.replace(f"{prefix}_layer", "")
+        try:
+            layer_idx = int(layer_str)
+        except ValueError:
+            logger.warning("Skipping unrecognized scale file: %s", path)
+            continue
+        scales[layer_idx] = torch.load(path, map_location=device, weights_only=True)
+
+    logger.info("Loaded %d per-layer scaling factors from %s", len(scales), input_dir)
+    return scales
+
+
+# ------------------------------------------------------------------
 # Quantization / dequantization primitives
 # ------------------------------------------------------------------
 

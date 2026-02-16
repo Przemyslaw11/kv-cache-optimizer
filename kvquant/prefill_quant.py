@@ -31,6 +31,38 @@ from kvquant.nuq import create_heuristic_codebook
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Cache append helper
+# ---------------------------------------------------------------------------
+
+
+def _append_to_cache(
+    existing: QuantizedKVCache,
+    new: QuantizedKVCache,
+) -> QuantizedKVCache:
+    """Append new quantized tokens to an existing cache along the seq_len axis.
+
+    Concatenates ``quantized_indices``, ``outlier_mask``, and
+    ``outlier_values`` along ``dim=2`` (seq_len) and updates
+    ``seq_lengths`` accordingly.
+
+    Args:
+        existing: Previously stored quantized cache.
+        new: Freshly quantized cache for the new token(s).
+
+    Returns:
+        Merged ``QuantizedKVCache`` covering the full sequence.
+    """
+    return QuantizedKVCache(
+        quantized_indices=torch.cat([existing.quantized_indices, new.quantized_indices], dim=2),
+        outlier_mask=torch.cat([existing.outlier_mask, new.outlier_mask], dim=2),
+        outlier_values=torch.cat([existing.outlier_values, new.outlier_values], dim=2),
+        scaling_factors=existing.scaling_factors,  # shared across sequence
+        codebook=existing.codebook,
+        seq_lengths=existing.seq_lengths + new.seq_lengths,
+    )
+
+
 class PrefillQuantizedAttention:
     """Quantized attention module supporting both prefill and generation phases.
 
@@ -173,17 +205,50 @@ class PrefillQuantizedAttention:
         value: torch.Tensor,
         attention_mask: torch.Tensor | None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Quantize a single new token during generation phase.
+        """Quantize a single new token during generation and append to cache.
 
-        For now, this performs a full quantize-dequantize round-trip on the
-        provided KV tensors.  In future phases, it will append to the
-        existing blocked sparse cache incrementally.
+        If a prefill cache exists (``self._key_cache`` is not None), the new
+        token's quantized data is appended to the existing cache tensors,
+        giving an incrementally growing quantized KV cache. If no cache
+        exists yet, a fresh cache is created from the provided tensors.
+
+        The appended cache is then dequantized in full for the attention
+        computation. This ensures the generation path is functionally
+        identical to re-quantizing the entire KV sequence, but avoids
+        redundant work on previously-quantized tokens.
+
+        Args:
+            key: ``[B, H, 1, D]`` or ``[B, H, S_new, D]`` — new token(s).
+            value: ``[B, H, 1, D]`` or ``[B, H, S_new, D]`` — new token(s).
+            attention_mask: ``[B, S_total]`` covering the full sequence
+                (prefill + new tokens), or ``None``.
+
+        Returns:
+            Tuple of dequantized key/value tensors covering the full
+            cache length: ``[B, H, S_total, D]``.
         """
-        cache_k = self.quantizer.quantize_keys(key, attention_mask)
-        cache_v = self.quantizer.quantize_values(value, attention_mask)
+        _B, _H, S_new, _D = key.shape
 
-        dequant_k = self.quantizer.dequantize(cache_k)
-        dequant_v = self.quantizer.dequantize(cache_v)
+        # Quantize only the new token(s)
+        new_mask: torch.Tensor | None = None
+        if attention_mask is not None:
+            # The last S_new columns of the mask correspond to the new tokens
+            new_mask = attention_mask[:, -S_new:]
+        cache_k = self.quantizer.quantize_keys(key, new_mask)
+        cache_v = self.quantizer.quantize_values(value, new_mask)
+
+        if self._key_cache is not None and self._value_cache is not None:
+            # Append new token(s) to existing cache
+            self._key_cache = _append_to_cache(self._key_cache, cache_k)
+            self._value_cache = _append_to_cache(self._value_cache, cache_v)
+        else:
+            # No existing cache — use the new cache directly
+            self._key_cache = cache_k
+            self._value_cache = cache_v
+
+        # Dequantize the full cache for attention computation
+        dequant_k = self.quantizer.dequantize(self._key_cache)
+        dequant_v = self.quantizer.dequantize(self._value_cache)
 
         return dequant_k, dequant_v
 
