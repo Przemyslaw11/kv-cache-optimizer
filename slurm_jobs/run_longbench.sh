@@ -8,7 +8,7 @@
 #SBATCH --mem=1024GB
 #SBATCH --output=logs/longbench_%j.out
 #SBATCH --error=logs/longbench_%j.err
-#SBATCH -A <your_grant_name>-gpu-a100
+#SBATCH -A plgoncotherapy-gpu-a100
 
 # =============================================================================
 # KVQuant Prefill — LongBench Evaluation

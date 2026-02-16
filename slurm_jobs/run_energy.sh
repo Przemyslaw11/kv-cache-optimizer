@@ -8,7 +8,7 @@
 #SBATCH --mem=1024GB
 #SBATCH --output=logs/energy_%j.out
 #SBATCH --error=logs/energy_%j.err
-#SBATCH -A <your_grant_name>-gpu-a100
+#SBATCH -A plgoncotherapy-gpu-a100
 
 # =============================================================================
 # KVQuant Prefill — Energy Profiling (NVML + CodeCarbon)

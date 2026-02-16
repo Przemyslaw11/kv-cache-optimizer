@@ -8,7 +8,7 @@
 #SBATCH --mem=128GB
 #SBATCH --output=logs/baseline_%j.out
 #SBATCH --error=logs/baseline_%j.err
-#SBATCH -A <your_grant_name>-gpu-a100
+#SBATCH -A plgoncotherapy-gpu-a100
 
 # =============================================================================
 # KVQuant Prefill — Baseline FP16 Prefill Measurement
