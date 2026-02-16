@@ -12,6 +12,16 @@ echo "User: $(whoami)"
 echo "Host: $(hostname)"
 echo ""
 
+# 0. Redirect caches to scratch (home quota is 10GB)
+export SCRATCH="/net/tscratch/people/$(whoami)"
+export UV_CACHE_DIR="$SCRATCH/.cache/uv"
+export PIP_CACHE_DIR="$SCRATCH/.cache/pip"
+export HF_HOME="$SCRATCH/.cache/huggingface"
+export WANDB_DIR="$SCRATCH/.cache/wandb"
+export XDG_CACHE_HOME="$SCRATCH/.cache"
+mkdir -p "$UV_CACHE_DIR" "$PIP_CACHE_DIR" "$HF_HOME" "$WANDB_DIR"
+echo ">>> Caches redirected to $SCRATCH/.cache/"
+
 # 1. Load modules
 echo ">>> Loading modules..."
 module purge
@@ -19,47 +29,43 @@ module load Python/3.10.4
 module load CUDA/12.4.0
 module list
 
-# 2. Create virtual environment
+# 2. Install uv (into user site-packages if not already available)
 echo ""
-echo ">>> Creating virtual environment..."
-python3 -m venv venv
-source venv/bin/activate
+echo ">>> Ensuring uv is available..."
+pip install --quiet --upgrade pip
+pip install --quiet uv
 
-# 3. Install uv
-echo ""
-echo ">>> Installing uv..."
-pip install --upgrade pip
-pip install uv
-
-# 4. Install project dependencies
+# 3. Install project dependencies (uv creates .venv automatically)
 echo ""
 echo ">>> Installing project dependencies with uv..."
-uv sync
+uv sync --python "$(which python3)"
 
-# 5. Create directories
+# 4. Create directories
 echo ""
 echo ">>> Creating project directories..."
 mkdir -p results logs models
 
-# 6. Verify installation
+# 5. Verify installation
 echo ""
 echo ">>> Verifying installation..."
-python -c "
-import torch
-import transformers
-import pynvml
-print(f'Python: {__import__(\"sys\").version}')
-print(f'PyTorch: {torch.__version__}')
-print(f'CUDA available: {torch.cuda.is_available()}')
-print(f'Transformers: {transformers.__version__}')
-print(f'pynvml: {pynvml.__version__}')
-print('All imports successful!')
-"
+.venv/bin/python -c '
+import sys, torch, transformers, pynvml, scipy, kvquant, utils
+print("Python:", sys.version)
+print("PyTorch:", torch.__version__)
+print("CUDA build:", torch.version.cuda)
+print("CUDA available:", torch.cuda.is_available())
+print("Transformers:", transformers.__version__)
+print("scipy:", scipy.__version__)
+print("kvquant: OK")
+print("utils: OK")
+print("All imports successful!")
+'
 
 echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "Next steps:"
-echo "  1. Edit slurm_jobs/*.sh to set your grant: #SBATCH -A <grant>-gpu-a100"
-echo "  2. Download model: huggingface-cli download togethercomputer/Llama-2-7B-32K-Instruct --local-dir ./models/Llama-2-7B-32K"
-echo "  3. Run baseline: sbatch slurm_jobs/run_baseline.sh"
+echo "  1. Activate the environment:  source .venv/bin/activate"
+echo "  2. Edit slurm_jobs/*.sh to set your grant: #SBATCH -A <grant>-gpu-a100"
+echo "  3. Download model: huggingface-cli download togethercomputer/Llama-2-7B-32K-Instruct --local-dir ./models/Llama-2-7B-32K"
+echo "  4. Run baseline: sbatch slurm_jobs/run_baseline.sh"
