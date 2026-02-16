@@ -75,6 +75,7 @@ kv-cache-optimizer/
 - When implementing the energy profiling, ensure that the code is efficient and does not introduce significant overhead to the experiments. Use context managers or decorators to handle the start and stop of energy measurement around the relevant code sections, and ensure that results are logged in a structured format for later analysis.
 - When writing the experiment scripts, ensure that they are designed to be easily configurable and extensible. For example, you might want to allow for different datasets, models, or evaluation metrics without requiring significant code changes. This can be achieved through the use of command-line arguments and modular design.
 - When implementing the evaluation scripts (e.g., for LongBench, RULER, Passkey), ensure that the code is structured to allow for easy addition of new tasks or metrics in the future. This might involve creating a common evaluation framework that can handle different datasets and metrics in a consistent way.
+- Please use single configuration files (e.g., `config.yaml`) for any experiment that has more than 3 hyperparameters. This will improve reproducibility and make it easier to track which configurations were used for each experiment. The experiment scripts can then read from the configuration file instead of relying solely on command-line arguments.
 
 ### SOLID & DRY Principles
 

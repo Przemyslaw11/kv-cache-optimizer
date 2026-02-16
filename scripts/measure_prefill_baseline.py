@@ -4,8 +4,8 @@ This script establishes the baseline measurements that all quantized
 configurations will be compared against. Results are saved to
 results/baseline_prefill_results.json.
 
-Expected runtime: ~2h on 1× A100-40GB.
-Required GPU resources: 1× A100-40GB.
+Expected runtime: ~2h on 1x A100-40GB.
+Required GPU resources: 1x A100-40GB.
 Output files: results/baseline_prefill_results.json
 """
 
@@ -45,9 +45,9 @@ def measure_prefill_latency(
     for prompt_len in prompt_lengths:
         for batch_size in batch_sizes:
             config_name = f"len{prompt_len}_batch{batch_size}"
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"Measuring: {config_name}")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
 
             # Generate dummy input
             dummy_text = "Hello world " * (prompt_len // 2)
@@ -105,9 +105,11 @@ def measure_prefill_latency(
                     "status": "success",
                 }
 
-                print(f"  Latency: {avg_latency:.4f}s | "
-                      f"Throughput: {throughput:.0f} tok/s | "
-                      f"Memory: {peak_mem_gb:.2f} GB")
+                print(
+                    f"  Latency: {avg_latency:.4f}s | "
+                    f"Throughput: {throughput:.0f} tok/s | "
+                    f"Memory: {peak_mem_gb:.2f} GB"
+                )
 
             except RuntimeError as e:
                 if "out of memory" in str(e).lower():
@@ -130,9 +132,7 @@ def main() -> None:
     torch.manual_seed(42)
     torch.cuda.manual_seed_all(42)
 
-    model_path = os.environ.get(
-        "MODEL_PATH", "./models/Llama-2-7B-32K"
-    )
+    model_path = os.environ.get("MODEL_PATH", "./models/Llama-2-7B-32K")
 
     print(f"Loading model from: {model_path}")
     model = AutoModelForCausalLM.from_pretrained(
@@ -160,13 +160,15 @@ def main() -> None:
         json.dump(results, f, indent=2)
 
     print(f"\nResults saved to: {output_path}")
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("SUMMARY")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for config, data in results.items():
         if data["status"] == "success":
-            print(f"  {config:25s} | {data['throughput_tokens_per_sec']:>10.0f} tok/s | "
-                  f"{data['peak_memory_gb']:>6.2f} GB")
+            print(
+                f"  {config:25s} | {data['throughput_tokens_per_sec']:>10.0f} tok/s | "
+                f"{data['peak_memory_gb']:>6.2f} GB"
+            )
         else:
             print(f"  {config:25s} | {data['status']}")
 

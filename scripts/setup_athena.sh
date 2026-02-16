@@ -49,7 +49,7 @@ mkdir -p results logs models
 echo ""
 echo ">>> Verifying installation..."
 .venv/bin/python -c '
-import sys, torch, transformers, pynvml, scipy, kvquant, utils
+import sys, torch, transformers, scipy, kvquant, utils
 print("Python:", sys.version)
 print("PyTorch:", torch.__version__)
 print("CUDA build:", torch.version.cuda)
@@ -58,6 +58,14 @@ print("Transformers:", transformers.__version__)
 print("scipy:", scipy.__version__)
 print("kvquant: OK")
 print("utils: OK")
+
+# Verify core classes can be imported
+from kvquant import (
+    BatchedKVQuantizer, PrefillQuantizedAttention,
+    BlockedCSCMatrix, BlockedCSRMatrix,
+    create_heuristic_codebook, quantize_to_nuq,
+)
+print("Core imports: OK")
 print("All imports successful!")
 '
 

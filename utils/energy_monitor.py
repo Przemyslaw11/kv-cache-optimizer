@@ -59,9 +59,7 @@ class EnergyMonitor:
             pynvml.nvmlInit()
             self._handle = pynvml.nvmlDeviceGetHandleByIndex(self.gpu_id)
         except Exception as e:
-            raise RuntimeError(
-                f"Failed to initialize NVML for GPU {self.gpu_id}: {e}"
-            ) from e
+            raise RuntimeError(f"Failed to initialize NVML for GPU {self.gpu_id}: {e}") from e
         self._samples = []
         self._start_time = time.perf_counter()
 

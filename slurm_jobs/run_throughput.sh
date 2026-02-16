@@ -28,7 +28,7 @@ module load CUDA/12.4.0
 module list
 
 cd $SCRATCH/kv-cache-optimizer
-source venv/bin/activate
+source .venv/bin/activate
 
 export WANDB_MODE=offline
 
